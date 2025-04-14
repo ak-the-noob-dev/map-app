@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Custom Map - OSM Style Tile Server</title>
+
+    <!-- Leaflet CSS -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Leaflet VectorGrid Plugin -->
+    <script src="https://unpkg.com/leaflet.vectorgrid/dist/Leaflet.VectorGrid.bundled.js"></script>
+
+    <style>
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family: Arial, sans-serif;
+      }
+      #map {
+        width: 100%;
+        height: 100vh;
+      }
+      .map-controls {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        background: white;
+        padding: 10px;
+        border-radius: 4px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+      }
+      .map-controls h3 {
+        margin-top: 0;
+        margin-bottom: 10px;
+      }
+      .layer-toggle {
+        margin-bottom: 5px;
+      }
+      .street-label {
+        color: #333;
+        background: none;
+        border: none;
+        text-shadow: 0px 0px 2px #fff, 0px 0px 2px #fff, 0px 0px 2px #fff,
+          0px 0px 2px #fff;
+        font-size: 12px;
+        font-weight: bold;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+      .area-label {
+        color: #777;
+        background: none;
+        border: none;
+        text-shadow: 0px 0px 2px #fff, 0px 0px 2px #fff, 0px 0px 2px #fff,
+          0px 0px 2px #fff;
+        font-size: 14px;
+        font-weight: normal;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+      .poi-label {
+        color: #b00;
+        background: none;
+        border: none;
+        text-shadow: 0px 0px 2px #fff, 0px 0px 2px #fff, 0px 0px 2px #fff,
+          0px 0px 2px #fff;
+        font-size: 11px;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+      .poi-icon {
+        background: none;
+        border: none;
+      }
+      .header-bar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 40px;
+        background: white;
+        z-index: 1000;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+      }
+      .app-name {
+        font-weight: bold;
+        font-size: 18px;
+        margin-right: 20px;
+      }
+      .search-box {
+        flex-grow: 1;
+        max-width: 300px;
+        margin-right: 20px;
+      }
+      .search-input {
+        width: 100%;
+        padding: 5px 10px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+      .map-container {
+        position: absolute;
+        top: 40px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header-bar">
+      <div class="app-name">My Map</div>
+      <div class="search-box">
+        <input
+          type="text"
+          class="search-input"
+          placeholder="Search location..."
+        />
+      </div>
+      <div>
+        <button id="zoomIn">+</button>
+        <button id="zoomOut">-</button>
+      </div>
+    </div>
+
+    <div class="map-container" id="map"></div>
+
+    <script>
+      // Initialize map without attribution
+      var map = L.map("map", {
+        attributionControl: false,
+        zoomControl: false,
+      }).setView([13.0827, 80.2707], 12); // Chennai, India
+
+      // Custom zoom controls
+      document.getElementById("zoomIn").addEventListener("click", function () {
+        map.zoomIn();
+      });
+
+      document.getElementById("zoomOut").addEventListener("click", function () {
+        map.zoomOut();
+      });
+
+      // Layer groups for labels
+      var roadLabels = L.layerGroup().addTo(map);
+      var areaLabels = L.layerGroup().addTo(map);
+      var poiLabels = L.layerGroup().addTo(map);
+
+      // OSM-like style definitions
+      const styles = {
+        // Roads - Using OSM color scheme
+        motorway: {
+          color: "#e892a2",
+          weight: 6,
+          fillColor: "#e892a2",
+          fill: true,
+        },
+        motorway_link: {
+          color: "#e892a2",
+          weight: 4,
+          fillColor: "#e892a2",
+          fill: true,
+        },
+        trunk: {
+          color: "#f9b29c",
+          weight: 5,
+          fillColor: "#f9b29c",
+          fill: true,
+        },
+        trunk_link: {
+          color: "#f9b29c",
+          weight: 3,
+          fillColor: "#f9b29c",
+          fill: true,
+        },
+        primary: {
+          color: "#fcd6a4",
+          weight: 4,
+          fillColor: "#fcd6a4",
+          fill: true,
+        },
+        primary_link: {
+          color: "#fcd6a4",
+          weight: 3,
+          fillColor: "#fcd6a4",
+          fill: true,
+        },
+        secondary: {
+          color: "#f7fabf",
+          weight: 3.5,
+          fillColor: "#f7fabf",
+          fill: true,
+        },
+        secondary_link: {
+          color: "#f7fabf",
+          weight: 2.5,
+          fillColor: "#f7fabf",
+          fill: true,
+        },
+        tertiary: {
+          color: "#ffffff",
+          weight: 3,
+          fillColor: "#ffffff",
+          fill: true,
+          opacity: 0.9,
+        },
+        tertiary_link: {
+          color: "#ffffff",
+          weight: 2,
+          fillColor: "#ffffff",
+          fill: true,
+          opacity: 0.9,
+        },
+        residential: {
+          color: "#ffffff",
+          weight: 2.5,
+          fillColor: "#ffffff",
+          fill: true,
+          opacity: 0.9,
+        },
+        unclassified: {
+          color: "#ffffff",
+          weight: 2,
+          fillColor: "#ffffff",
+          fill: true,
+          opacity: 0.8,
+        },
+        service: {
+          color: "#ffffff",
+          weight: 1.5,
+          fillColor: "#ffffff",
+          fill: true,
+          opacity: 0.7,
+        },
+        footway: {
+          color: "#8b7158",
+          weight: 1,
+          fillColor: "#8b7158",
+          fill: true,
+          opacity: 0.8,
+          dashArray: "3,2",
+        },
+        path: {
+          color: "#8b7158",
+          weight: 1,
+          fillColor: "#8b7158",
+          fill: true,
+          opacity: 0.8,
+          dashArray: "3,2",
+        },
+
+        // Areas
+        building: {
+          color: "#d4cbc8",
+          fillColor: "#e5e0d3",
+          fillOpacity: 1,
+          weight: 1,
+          opacity: 0.7,
+        },
+        water: {
+          color: "#a0c3e8",
+          fillColor: "#a0c3e8",
+          fillOpacity: 1,
+          weight: 0.5,
+          opacity: 0.9,
+        },
+        grass: {
+          color: "#cdebb0",
+          fillColor: "#cdebb0",
+          fillOpacity: 1,
+          weight: 0.5,
+          opacity: 0.8,
+        },
+        forest: {
+          color: "#add19e",
+          fillColor: "#add19e",
+          fillOpacity: 1,
+          weight: 0.5,
+          opacity: 0.8,
+        },
+        park: {
+          color: "#c8daaf",
+          fillColor: "#c8daaf",
+          fillOpacity: 1,
+          weight: 0.5,
+          opacity: 0.8,
+        },
+        residential_area: {
+          color: "#f2f2ef",
+          fillColor: "#f2f2ef",
+          fillOpacity: 1,
+          weight: 0.5,
+          opacity: 0.6,
+        },
+        commercial: {
+          color: "#f2d9d9",
+          fillColor: "#f2d9d9",
+          fillOpacity: 1,
+          weight: 0.5,
+          opacity: 0.7,
+        },
+        industrial: {
+          color: "#e9e0da",
+          fillColor: "#e9e0da",
+          fillOpacity: 1,
+          weight: 0.5,
+          opacity: 0.7,
+        },
+        railway: {
+          color: "#82818a",
+          weight: 2,
+          fillColor: "#82818a",
+          dashArray: "3,3",
+          opacity: 0.8,
+        },
+
+        // Boundaries
+        boundary: {
+          color: "#9e46e7",
+          weight: 1,
+          fillOpacity: 0,
+          dashArray: "4,2",
+          opacity: 0.7,
+        },
+
+        // Default
+        default: { color: "#888", weight: 1, fillOpacity: 0.2 },
+      };
+
+      // Background map layer (pale neutral background)
+      L.tileLayer(
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=",
+        {
+          attribution: "",
+        }
+      ).addTo(map);
+
+      // Load vector tiles with custom styling to match OSM
+      var vectorTiles = L.vectorGrid
+        .protobuf("http://localhost:8080/tiles/{z}/{x}/{y}.mvt", {
+          vectorTileLayerStyles: {
+            osm_layer: function (properties, zoom) {
+              // Roads
+              if (properties.highway) {
+                const highway = properties.highway;
+                if (styles[highway]) {
+                  return styles[highway];
+                }
+
+                if (highway === "motorway" || highway === "motorway_link")
+                  return styles.motorway;
+                if (highway === "trunk" || highway === "trunk_link")
+                  return styles.trunk;
+                if (highway === "primary" || highway === "primary_link")
+                  return styles.primary;
+                if (highway === "secondary" || highway === "secondary_link")
+                  return styles.secondary;
+                if (highway === "tertiary" || highway === "tertiary_link")
+                  return styles.tertiary;
+                if (highway === "residential" || highway === "service")
+                  return styles.residential;
+                if (highway === "unclassified") return styles.unclassified;
+                if (
+                  highway === "path" ||
+                  highway === "footway" ||
+                  highway === "cycleway"
+                )
+                  return styles.footway;
+
+                return styles.residential;
+              }
+
+              // Buildings
+              if (properties.building) {
+                return styles.building;
+              }
+
+              // Water features
+              if (properties.natural === "water" || properties.waterway) {
+                return styles.water;
+              }
+
+              // Railways
+              if (properties.railway) {
+                return styles.railway;
+              }
+
+              // Parks and green areas
+              if (
+                properties.leisure === "park" ||
+                properties.leisure === "garden"
+              ) {
+                return styles.park;
+              }
+
+              // Forests and natural areas
+              if (
+                properties.natural === "wood" ||
+                properties.landuse === "forest"
+              ) {
+                return styles.forest;
+              }
+
+              // Land use areas
+              if (properties.landuse) {
+                if (properties.landuse === "residential")
+                  return styles.residential_area;
+                if (properties.landuse === "commercial")
+                  return styles.commercial;
+                if (properties.landuse === "industrial")
+                  return styles.industrial;
+                if (
+                  properties.landuse === "grass" ||
+                  properties.landuse === "meadow"
+                )
+                  return styles.grass;
+              }
+
+              // Administrative boundaries
+              if (properties.boundary === "administrative") {
+                return styles.boundary;
+              }
+
+              // Default style
+              return styles.default;
+            },
+          },
+          interactive: true,
+          getFeatureId: function (f) {
+            return f.properties.osm_id;
+          },
+          maxNativeZoom: 18,
+          maxZoom: 22,
+          minZoom: 4,
+          buffer: 128,
+          rendererFactory: L.canvas.tile,
+        })
+        .addTo(map);
+
+      // Function to clear all labels
+      function clearAllLabels() {
+        roadLabels.clearLayers();
+        areaLabels.clearLayers();
+        poiLabels.clearLayers();
+      }
+
+      // Timer to limit the number of label refreshes
+      let labelTimer = null;
+
+      // Handle label refresh with proper memory management
+      function refreshLabels() {
+        // Clear any pending timer to prevent memory leaks
+        if (labelTimer) {
+          clearTimeout(labelTimer);
+        }
+
+        // Set a small delay to avoid too many refreshes during zoom/pan
+        labelTimer = setTimeout(function () {
+          clearAllLabels();
+          addLabels();
+        }, 200);
+      }
+
+      // Function to add all labels based on current zoom level
+      function addLabels() {
+        const zoom = map.getZoom();
+        const bounds = map.getBounds();
+
+        // Fetching data for labels with bbox constraints to reduce server load
+        fetch(
+          `http://localhost:8080/api/features?bbox=${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}&zoom=${zoom}`
+        )
+          .then((response) => response.json())
+          .then((data) => {
+            // Add Street labels
+            if (zoom >= 14) {
+              data.streets.forEach((street) => {
+                // Only show major roads at lower zoom levels
+                if (
+                  zoom < 16 &&
+                  ![
+                    "motorway",
+                    "trunk",
+                    "primary",
+                    "secondary",
+                    "tertiary",
+                  ].includes(street.highway)
+                ) {
+                  return;
+                }
+
+                const position = [street.lat, street.lon];
+                const name = street.name;
+
+                if (name) {
+                  const label = L.marker(position, {
+                    icon: L.divIcon({
+                      className: "street-label",
+                      html: name,
+                      iconSize: [100, 14],
+                      iconAnchor: [50, 7],
+                    }),
+                    interactive: false,
+                  });
+
+                  roadLabels.addLayer(label);
+                }
+              });
+            }
+
+            // Add Area labels
+            if (zoom >= 11) {
+              data.areas.forEach((area) => {
+                // Only show important areas at lower zoom levels
+                if (zoom < 13 && !area.important) {
+                  return;
+                }
+
+                const position = [area.lat, area.lon];
+                const name = area.name;
+
+                if (name) {
+                  const fontSize = area.important ? 16 : 14;
+                  const label = L.marker(position, {
+                    icon: L.divIcon({
+                      className: "area-label",
+                      html: name,
+                      iconSize: [120, fontSize + 2],
+                      iconAnchor: [60, (fontSize + 2) / 2],
+                    }),
+                    interactive: false,
+                  });
+
+                  areaLabels.addLayer(label);
+                }
+              });
+            }
+
+            // Add POI labels (only at high zoom levels)
+            if (zoom >= 16) {
+              data.pois.forEach((poi) => {
+                const position = [poi.lat, poi.lon];
+                const name = poi.name;
+                let icon = "🏢"; // Default icon
+
+                // Assign icons based on amenity type
+                if (
+                  poi.amenity === "hospital" ||
+                  poi.amenity === "clinic" ||
+                  poi.amenity === "doctors"
+                ) {
+                  icon = "🏥";
+                } else if (poi.amenity === "school") {
+                  icon = "🏫";
+                } else if (poi.amenity === "restaurant") {
+                  icon = "🍴";
+                } else if (
+                  poi.shop === "supermarket" ||
+                  poi.shop === "convenience"
+                ) {
+                  icon = "🛒";
+                } else if (poi.leisure === "park") {
+                  icon = "🌳";
+                } else if (poi.amenity === "place_of_worship") {
+                  icon = "⛪";
+                }
+
+                if (name) {
+                  // First add the icon
+                  const iconMarker = L.marker(position, {
+                    icon: L.divIcon({
+                      className: "poi-icon",
+                      html: icon,
+                      iconSize: [20, 20],
+                      iconAnchor: [10, 10],
+                    }),
+                    interactive: true,
+                  });
+
+                  iconMarker.bindTooltip(name);
+                  poiLabels.addLayer(iconMarker);
+
+                  // Add name below for some important POIs
+                  if (poi.important) {
+                    const offsetPosition = [position[0] - 0.00008, position[1]];
+                    const nameMarker = L.marker(offsetPosition, {
+                      icon: L.divIcon({
+                        className: "poi-label",
+                        html: name,
+                        iconSize: [80, 14],
+                        iconAnchor: [40, -10],
+                      }),
+                      interactive: false,
+                    });
+
+                    poiLabels.addLayer(nameMarker);
+                  }
+                }
+              });
+            }
+          })
+          .catch((error) => {
+            console.error("Error fetching labels:", error);
+
+            // Fallback for development - when API is not available
+            if (zoom >= 14) {
+              // Add some placeholder road labels
+              const center = map.getCenter();
+              const label = L.marker(center, {
+                icon: L.divIcon({
+                  className: "street-label",
+                  html: "Main Street",
+                  iconSize: [100, 14],
+                  iconAnchor: [50, 7],
+                }),
+                interactive: false,
+              });
+              roadLabels.addLayer(label);
+            }
+          });
+      }
+
+      // Add event listeners for map movement
+      map.on("zoomend moveend", refreshLabels);
+
+      // Initial label loading
+      refreshLabels();
+
+      // Improve performance by limiting processing during movement
+      map.on("movestart", function () {
+        roadLabels.eachLayer(function (layer) {
+          layer.setOpacity(0.3);
+        });
+        areaLabels.eachLayer(function (layer) {
+          layer.setOpacity(0.3);
+        });
+        poiLabels.eachLayer(function (layer) {
+          layer.setOpacity(0.3);
+        });
+      });
+
+      map.on("moveend", function () {
+        roadLabels.eachLayer(function (layer) {
+          layer.setOpacity(1);
+        });
+        areaLabels.eachLayer(function (layer) {
+          layer.setOpacity(1);
+        });
+        poiLabels.eachLayer(function (layer) {
+          layer.setOpacity(1);
+        });
+      });
+
+      // Simple search functionality
+      document
+        .querySelector(".search-input")
+        .addEventListener("keydown", function (e) {
+          if (e.key === "Enter") {
+            const searchTerm = this.value.trim();
+            if (searchTerm) {
+              // Send search request to the server
+              fetch(
+                `http://localhost:8080/api/search?q=${encodeURIComponent(
+                  searchTerm
+                )}`
+              )
+                .then((response) => response.json())
+                .then((results) => {
+                  if (results.length > 0) {
+                    // Center on the first result
+                    map.setView([results[0].lat, results[0].lon], 17);
+
+                    // Mark the location
+                    L.marker([results[0].lat, results[0].lon])
+                      .addTo(map)
+                      .bindPopup(results[0].name)
+                      .openPopup();
+                  } else {
+                    alert("No results found");
+                  }
+                })
+                .catch(() => {
+                  alert("Search functionality not implemented yet");
+                });
+            }
+          }
+        });
+    </script>
+  </body>
+</html>

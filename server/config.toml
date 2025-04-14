@@ -1,0 +1,22 @@
+[webserver]
+port = ":8080"
+
+[[providers]]
+name = "postgis"
+type = "postgis"
+host = "localhost"
+port = 5432
+database = "mapapp"
+user = "postgres"
+password = "postgres"
+srid = 4326
+max_connections = 100
+
+[[maps]]
+name = "streets"
+tile_buffer = 64
+[[maps.layers]]
+provider_layer = "postgis.streets"
+min_zoom = 0
+max_zoom = 14
+default_zoom = 2 

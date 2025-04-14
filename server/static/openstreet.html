@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Custom Map - OpenStreetMap Layer</title>
+
+    <!-- Leaflet CSS -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family: Arial, sans-serif;
+      }
+      #map {
+        width: 100%;
+        height: 100vh;
+      }
+      .header-bar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 40px;
+        background: white;
+        z-index: 1000;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+      }
+      .app-name {
+        font-weight: bold;
+        font-size: 18px;
+        margin-right: 20px;
+      }
+      .search-box {
+        flex-grow: 1;
+        max-width: 300px;
+        margin-right: 20px;
+      }
+      .search-input {
+        width: 100%;
+        padding: 5px 10px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+      .map-container {
+        position: absolute;
+        top: 40px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header-bar">
+      <div class="app-name">My Map</div>
+      <div class="search-box">
+        <input
+          type="text"
+          class="search-input"
+          placeholder="Search location..."
+        />
+      </div>
+      <div>
+        <button id="zoomIn">+</button>
+        <button id="zoomOut">-</button>
+      </div>
+    </div>
+
+    <div class="map-container" id="map"></div>
+
+    <script>
+      // Initialize map
+      var map = L.map("map", {
+        attributionControl: true,
+        zoomControl: false,
+      }).setView([13.0827, 80.2707], 12); // Chennai, India
+
+      // Add OpenStreetMap tile layer
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19,
+      }).addTo(map);
+
+      // Custom zoom controls
+      document.getElementById("zoomIn").addEventListener("click", function () {
+        map.zoomIn();
+      });
+
+      document.getElementById("zoomOut").addEventListener("click", function () {
+        map.zoomOut();
+      });
+
+      // Simple search functionality
+      document
+        .querySelector(".search-input")
+        .addEventListener("keydown", function (e) {
+          if (e.key === "Enter") {
+            const searchTerm = this.value.trim();
+            if (searchTerm) {
+              // Send search request to the server
+              fetch(
+                `http://localhost:8080/api/search?q=${encodeURIComponent(
+                  searchTerm
+                )}`
+              )
+                .then((response) => response.json())
+                .then((results) => {
+                  if (results.length > 0) {
+                    // Center on the first result
+                    map.setView([results[0].lat, results[0].lon], 17);
+
+                    // Mark the location
+                    L.marker([results[0].lat, results[0].lon])
+                      .addTo(map)
+                      .bindPopup(results[0].name)
+                      .openPopup();
+                  } else {
+                    alert("No results found");
+                  }
+                })
+                .catch(() => {
+                  alert("Search functionality not implemented yet");
+                });
+            }
+          }
+        });
+    </script>
+  </body>
+</html>
